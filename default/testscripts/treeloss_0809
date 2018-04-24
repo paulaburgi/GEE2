@@ -1,0 +1,38 @@
+var h_all = ee.Image("UMD/hansen/global_forest_change_2016_v1_4");
+var int   = ee.ImageCollection("users/pmb229/test/image9_nodata_metadata_test"); 
+
+// get bounds on interferograms
+var intbounds = int.geometry()
+
+// isolate loss year band
+var h_ly = h_all.select('lossyear'); 
+
+// create new image with only 2008/2009 tree loss
+var h_0809 = ee.Image(0)
+    .where(h_ly.eq(8), 1)
+    .where(h_ly.eq(9), 1)
+    .clip(intbounds)
+// update mask so that all values = 0 are masked
+var h_0809 = h_0809.updateMask(h_0809)
+    
+// map loss year
+Map.centerObject(intbounds, 11)
+Map.addLayer(h_0809, {palette: ['blue', 'red']}, 'loss year 08/09'); 
+
+// filter int
+var id  = int.first(); 
+var int = ee.Image(id); 
+var intmask = int.updateMask(h_0809)
+print(int)
+print(intmask)
+
+// map masked int
+var vizparams2 = {min: -3.14, max: 3.14, palette: ['9400D3', '4B0082', '0000FF', '00FF00', 'FFFF00', 'FF7F00', 'FF0000']}; 
+Map.addLayer(int, vizparams2, 'int'); 
+Map.addLayer(intmask, {}, 'masked int'); 
+
+
+
+
+
+

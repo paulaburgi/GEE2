@@ -1,0 +1,64 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var point = /* color: #d63000 */ee.Geometry.Point([-123.3377981184276, 43.86281395526774]),
+    point2 = /* color: #d63000 */ee.Geometry.Point([-123.36405775177002, 43.84164597031404]);
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+// point and interferograms
+  var int_all = ee.ImageCollection("users/pmb229/cascadia/all_good_int1"); 
+  var intbounds = int_all.geometry()
+
+// Goward et al. 2012, 0 – Background area, 1 – Persistent Non-forest, 2 – Persistent Forest
+// 4 – Persistent Water, pixels great than 10: year since 1970, eg. tree loss in 2003 = 33 (1970+33 = 2003)
+  var fdf     = ee.ImageCollection("users/pmb229/cascadia/LSp046r030_disturbYear_first"); 
+  var fdf     = ee.Image(fdf.first())
+  var fdl     = ee.ImageCollection("users/pmb229/cascadia/LSp046r030_disturbYear_last"); 
+  var fdl     = ee.Image(fdl.first())
+  var gbounds = fdf.geometry()
+
+// Hansen
+  var h_all   = ee.Image("UMD/hansen/global_forest_change_2016_v1_4");
+  var h       = h_all.select('lossyear').clip(gbounds);
+
+// difference in first and last cleared regions
+  var dif = fdl.subtract(fdf)
+  var mask = dif.neq(0);
+  var dif = dif.updateMask(mask).clip(intbounds); 
+  // var geo = geometry.buffer(50000)
+  // var difmean = dif.reduceRegion({
+  //   reducer: ee.Reducer.mean(),
+  //   geometry: geo})
+
+//Masks
+  var treemasks = require('users/pmb229/modules:treemasks')
+  var m_tt      = treemasks.shorttreemask(fdl, h, intbounds)
+  var m_st      = treemasks.talltreemask(fdf, h, intbounds)
+  var m_nt      = treemasks.notreemask(h, intbounds)
+
+// Map
+  Map.centerObject(point, 14)
+  Map.addLayer(m_tt, {palette:'green', opacity:0.5}, 'tall trees')
+  Map.addLayer(m_st, {palette:'yellow', opacity:0.5}, 'short trees')
+  Map.addLayer(m_nt, {palette:'brown', opacity:0.5}, 'bare')
+  //Map.addLayer(fdf, {min:10, max:25}, 'forest disturb first'); 
+  //Map.addLayer(fdl, {min:10, max:25}, 'forest disturb last'); 
+  // Map.addLayer(h, {min:0, max:10}, 'hansen'); 
+  // Map.addLayer(dif, {min:0, max:30, palette:['9400D3', '4B0082', '0000FF', 
+  //             '00FF00', 'FFFF00', 'FF7F00', 'FF0000']}, 'first/last diff');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

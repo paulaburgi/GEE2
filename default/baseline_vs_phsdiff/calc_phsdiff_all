@@ -1,0 +1,214 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var geom = /* color: #d63000 */ee.Geometry.Point([-123.31011586242676, 43.81160226474998]);
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+// Load all data  
+  var util      = require('users/pmb229/modules:utilities')
+  
+  var int_all   = ee.ImageCollection("users/pmb229/cascadia/all_good_int1"); 
+  var fdf       = ee.ImageCollection("users/pmb229/cascadia/LSp046r030_disturbYear_first"); 
+  var fdl       = ee.ImageCollection("users/pmb229/cascadia/LSp046r030_disturbYear_last"); 
+  var h_all     = ee.Image("UMD/hansen/global_forest_change_2016_v1_4");
+  
+  var fdbounds  = fdf.geometry()
+  var intbounds = int_all.geometry()
+  
+  var fdf       = ee.Image(fdf.first())
+  var fdl       = ee.Image(fdl.first())
+  var h         = h_all.select('lossyear').clip(fdbounds);
+  
+  var int       = ee.Image(int_all.first())
+  var fidx      = ee.Filter.eq('idx', 1); 
+  //var int       = ee.Image(int_all.filter(fidx).first())
+  
+// Masks
+  var treemasks = require('users/pmb229/modules:treemasks')
+  var m_tt      = treemasks.shorttreemask(fdl, h, intbounds)
+  var m_st      = treemasks.talltreemask(fdf, h, intbounds)
+  var m_nt      = treemasks.notreemask(h, intbounds)
+  var m_yt      = treemasks.notbaremask(h, intbounds) // 0=bare, 1=not bare
+  
+// Masks to polygons and buffers
+  var bufferamount = ee.Number(300)
+  var polybuff   = require('users/pmb229/modules:mask2regions')
+  var f_nt       = polybuff.mask2vect(m_nt)
+  var f_nt_buff  = polybuff.bufferfeatures(f_nt, bufferamount)
+  
+// Mask interferograms with above masks
+// not needed in calculation, just for visualization
+  var intreg     = require('users/pmb229/modules:intregions')
+  var i_nt       = intreg.ints_nt(int_all, f_nt)
+  var i_st       = intreg.ints_yt(int_all, f_nt_buff, m_yt, m_st)
+  var i_tt       = intreg.ints_yt(int_all, f_nt_buff, m_yt, m_tt)
+     
+// Calc mean in and out, for all int
+  var circstats   = require('users/pmb229/modules:circstats')
+  var circstats2  = require('users/pmb229/modules:circstats2')
+
+print('f_nt', f_nt)
+  // calc for subset of feature collection (160 total)
+    var startidx = 3; 
+    var endidx   = 3; 
+    var f_nt      = util.featuresubset(f_nt, startidx, endidx)
+    var f_nt_buff = util.featuresubset(f_nt_buff, startidx, endidx)
+    print('f_nt', f_nt)
+
+    
+  // calc for subset of image collection & map (32 total)
+    var int_all   = util.imcollsubset(int_all, 20)
+    // var image = int; 
+    var icfunc    = function(image) {
+
+  // calc circ means  
+    //var image = int; 
+    var ntim = circstats2.circmean_nt(image, f_nt)
+    var stim = circstats2.circmean_at(image, f_nt_buff, m_yt, m_st)
+    var ttim = circstats2.circmean_at(image, f_nt_buff, m_yt, m_tt)
+
+        
+  // calc circ diff 
+    var stdim = circstats2.circdiff_at(f_nt, ntim, stim, bufferamount)
+    var ttdim = circstats2.circdiff_at(f_nt, ntim, ttim, bufferamount)
+    var pd_st = treemasks.nodatamask(stdim, intbounds) 
+    var pd_tt = treemasks.nodatamask(ttdim, intbounds) 
+    
+  // make into 1 image, with baseline and phase differences as bands
+    var bl    = intreg.baselineimage(image, f_nt)
+    //var bl    = pd_st.select(['constant_mean'], ['baseline'])
+    var pd1   = pd_st.select(['constant_mean'], ['short trees'])
+    var pd2   = pd_tt.select(['constant_mean'], ['tall trees']).addBands(pd1)
+    var pd    = pd2.addBands(bl)
+    return pd }
+
+  // map over image collection
+    var pd_all = int_all.map(icfunc)
+    
+    print('pd_all',  pd_all)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// **************************** TO DO ****************************
+// Make it so if there isn't tall trees nearby, don't include that geometry. 
+// Do for whole image collection
+// Ask on forum: how to make more efficient? 
+
+
+// Map it
+Map.centerObject(intbounds, 11)
+// map masked interferograms
+  // var i_nt = ee.Image(i_nt.first())
+  // var i_st = ee.Image(i_st.first())
+  // var i_tt = ee.Image(i_tt.first())
+  // Map.addLayer(int, util.intpalette, 'int')
+  // Map.addLayer(i_nt, util.intpalette, 'i_nt')
+  // Map.addLayer(i_st, util.intpalette, 'i_st')
+  // Map.addLayer(i_tt, util.intpalette, 'i_tt')
+// map masks
+  Map.addLayer(m_nt, {palette:'black', opacity:0.5}, 'm_nt'); 
+  Map.addLayer(m_st, {palette:'blue', opacity:0.5}, 'm_st'); 
+  Map.addLayer(m_tt, {palette:'green', opacity:0.5}, 'm_tt');
+// map phase differences 
+  var pd_st = ee.Image(pd_all.first()).select(['short trees'])
+  var pd_tt = ee.Image(pd_all.first()).select(['tall trees'])
+  Map.addLayer(pd_st, {min:0, max:3.14, palette:['white', 'red']}, 'short trees phase diff')
+  Map.addLayer(pd_tt, {min:0, max:3.14, palette:['white', 'red']}, 'tall trees phase diff')
+//map vectors
+  var display = ee.Image(0).updateMask(0).paint(f_nt_buff, '000000', 1);
+  Map.addLayer(display, {palette: 'black'}, 'buffer');
+  
+  // var display = ee.Image(0).updateMask(0).paint(f_nt, '000000', 1);
+  // Map.addLayer(display, {palette: 'black'}, 'bare outline');
+  
+  // var display = ee.Image(0).updateMask(0).paint(f_nt_buff, '000000', 1);
+  // Map.addLayer(display, {palette: 'grey'}, 'buff outline');
+   
+  // var talltreebounds = polybuff.mask2vect(i_tt)
+  // var display = ee.Image(0).updateMask(0).paint(talltreebounds, '000000', 1);
+  // Map.addLayer(display, {palette: 'red'}, 'tall tree outline');
+  
+  // var shorttreebounds = polybuff.mask2vect(i_st)
+  // var display = ee.Image(0).updateMask(0).paint(shorttreebounds, '000000', 1);
+  // Map.addLayer(display, {palette: 'yellow'}, 'short tree outline');
+  
+
+  
+
+
+function getCollXY(imgcoll, region, scale, xband, ybands, 
+                  startindx, endindx){
+  
+  var bands = ee.List([xband]).cat(ee.List(ybands));
+  var arrimgcoll = imgcoll.select(bands).toArray();
+  
+  // Go through a couple of hoops to get a 3D array 
+  //(axis 0 = region, axis 1 = images, axis 2 = bands)
+  var arrimgcoll_redx = arrimgcoll
+      .reduceRegion(ee.Reducer.toList(), region, scale);
+  arrimgcoll_redx = ee.Array(arrimgcoll_redx
+      .get('array').getInfo()); // ---> No way around this getInfo()????
+  
+  // Slice along axis 1 (images) according to selected start/end
+  var arrimgcoll_redx_sel = arrimgcoll_redx
+      .slice(1, startindx, endindx);
+  
+  // Slice along axis 2 (bands) to get x values
+  var xValues = arrimgcoll_redx_sel.slice(2, 0, 1);
+  // Go through some hoops to get a flat array 
+  var xValues_flat = ee.Array(xValues.project([0,1]).toList().flatten());
+  
+  // Slice along axis 2 (bands) to get y values
+  var yValues = arrimgcoll_redx_sel.slice(2, 1, bands.length());
+  // Go through some hoops to get a flat array along images but not along bands
+  var yValues_flat = ee.Array.cat(yValues.toList(), 0);
+  
+  return ee.Dictionary({'xValues': xValues_flat, 'yValues': yValues_flat});
+  
+}
+
+
+function plotXY(xy, snames, xtitle, ytitle, title){
+  
+  var xValues = ee.Array(xy.get('xValues'));
+  var yValues = ee.Array(xy.get('yValues'));
+  
+  var chart = ui.Chart.array.values(yValues, 0, xValues);
+  chart = chart.setSeriesNames(snames);
+  chart = chart.setOptions({
+    'title': title,
+    'hAxis': {'title': xtitle},
+    'vAxis': {'title': ytitle},
+  });
+
+  print(chart);
+  
+  return chart;
+  
+}
+
+
+var collxy_1img = getCollXY(pd_all, geom, 30, 'baseline', 
+                  ['short trees', 'tall trees'], 0, pd_all.size());
+
+plotXY(collxy_1img, ['short trees', 'tall trees'],
+      'baseline (m)', 'phase difference','old vs young trees');
+
+
+
+
+
+
+

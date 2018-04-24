@@ -1,0 +1,8 @@
+var int_all = ee.ImageCollection("users/pmb229/cascadia/all_good_int1"); 
+
+var r = require('users/pmb229/default:testscripts/testmodule');
+
+var result1 = r.testmodule1(int_all);
+var result2 = r.testmodule2(int_all);
+
+print('result1', result1, 'result2', result2)

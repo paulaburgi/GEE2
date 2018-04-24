@@ -1,0 +1,74 @@
+// calculate circular mean
+exports.circmean = function(image, geom) {
+  var s = image.sin()
+  var c = image.cos()
+  var sum_cos_in = ee.Array(c.reduceRegion({
+  reducer: ee.Reducer.sum(), 
+  geometry: geom,
+  scale: 1}).get('b1'))
+  var sum_sin_in = ee.Array(s.reduceRegion({
+  reducer: ee.Reducer.sum(),
+  geometry: geom,
+  scale: 1}).get('b1'))
+  var m_in  = sum_cos_in.atan2(sum_sin_in)
+  var phs   = ee.Array(m_in)
+  return phs
+}
+
+// calculate circular difference
+exports.circdiff = function(phs1, phs2) {
+  var den   = phs2.cos().pow(2).add(phs2.sin().pow(2))
+  var rl1   = phs2.cos().multiply(phs1.cos()).add(phs1.sin().multiply(phs2.sin()))
+  var rl    = rl1.divide(den)
+  var im1   = phs1.cos().multiply(phs2.sin()).multiply(-1).add(phs1.sin().multiply(phs2.cos()))
+  var im    = im1.divide(den)
+  var pd    = rl.atan2(im)
+  var phsdif  = ee.Array(pd)
+  return phsdif}
+  
+
+
+  
+
+
+
+
+
+// var imf = function(image) {
+//   // perform circular mean
+//   var s = image.sin()
+//   var c = image.cos()
+//   var sum_cos_in = ee.Array(c.reduceRegion({
+//   reducer: ee.Reducer.sum(), 
+//   geometry: gin,
+//   scale: 1}).get('b1'))
+//   var sum_sin_in = ee.Array(s.reduceRegion({
+//   reducer: ee.Reducer.sum(),
+//   geometry: gin,
+//   scale: 1}).get('b1'))
+//   var sum_cos_out = ee.Array(c.reduceRegion({
+//   reducer: ee.Reducer.sum(), 
+//   geometry: gout,
+//   scale: 1}).get('b1'))
+//   var sum_sin_out = ee.Array(s.reduceRegion({
+//   reducer: ee.Reducer.sum(),
+//   geometry: gout,
+//   scale: 1}).get('b1'))
+//     var m_in  = sum_cos_in.atan2(sum_sin_in)
+//     var m_out = sum_cos_out.atan2(sum_sin_out)
+//     var phs1   = ee.Array(m_in)
+//     var phs2   = ee.Array(m_out)  
+//     var den   = phs2.cos().pow(2).add(phs2.sin().pow(2))
+//     var rl1   = phs2.cos().multiply(phs1.cos()).add(phs1.sin().multiply(phs2.sin()))
+//     var rl    = rl1.divide(den)
+//     var im1   = phs1.cos().multiply(phs2.sin()).multiply(-1).add(phs1.sin().multiply(phs2.cos()))
+//     var im    = im1.divide(den)
+//     var pd    = rl.atan2(im)
+//   var phsdif  = ee.Number(pd)
+//   var image = image
+//   .set('meanphs_in', m_in)
+//   .set('meanphs_out', m_out)
+//   .set('meanphsdiff', phsdif)
+//   return image
+//   }
+// var int_all_mean = int_all.map(imf)

@@ -1,0 +1,61 @@
+// mask interferogram, bare regions
+exports.ints_nt_m = function(intcoll, mask) {
+  var    hmask = function(image) {return image.updateMask(mask)}; 
+  var    i_nt  = intcoll.map(hmask); 
+  return i_nt
+  }
+
+// mask interferogram, bare regions, with features instead of mask
+exports.ints_nt = function(intcoll, features_bare) {
+  var addField = function(feature){return feature.set("Value", 1)};
+  var inbare       = features_bare.map(addField).reduceToImage(["Value"], ee.Reducer.mean());
+  var inbare_mask  = features_bare.reduceToImage(["mean"], ee.Reducer.mean());  
+
+  var baremask     = function(image) {
+    return image.updateMask(inbare)}; 
+  var i_nt       = intcoll.map(baremask); 
+  return i_nt}
+
+// mask interferogram, trees trees  
+exports.ints_yt = function(intcoll, features_buff, mask_notbare, mask_trees) {
+  var addField = function(feature){return feature.set("Value", 1)};
+  var inbuff       = features_buff.map(addField).reduceToImage(["Value"], ee.Reducer.mean());
+  var inbuff       = features_buff.reduceToImage(["mean"], ee.Reducer.mean());  
+  var inbuff_n07   = inbuff.updateMask(mask_notbare)
+  var inbuff_mask  = inbuff.updateMask(mask_trees)
+
+  var h0mask    = function(image) {
+    return image.updateMask(inbuff_mask)}; 
+  var i_t       = intcoll.map(h0mask); 
+  return i_t}
+  
+  
+  
+// bare regions: mask 1 int
+exports.int_nt = function(int, features_bare) {
+  var addField = function(feature){return feature.set("Value", 1)};
+  var inbare       = features_bare.map(addField).reduceToImage(["Value"], ee.Reducer.mean());
+  var inbare_mask  = features_bare.reduceToImage(["mean"], ee.Reducer.mean());  
+  
+  return int.updateMask(inbare_mask)}
+  
+// veg regions: mask 1 int
+exports.int_yt = function(int, features_buff, mask_notbare, mask_trees) {
+  var addField = function(feature){return feature.set("Value", 1)};
+  var inbuff       = features_buff.map(addField).reduceToImage(["Value"], ee.Reducer.mean());
+  var inbuff       = features_buff.reduceToImage(["mean"], ee.Reducer.mean());  
+  var inbuff_n07   = inbuff.updateMask(mask_notbare)
+  var inbuff_mask  = inbuff.updateMask(mask_trees)
+
+  return int.updateMask(inbuff_mask)}
+
+
+
+// returns image with baseline as value in bare regions
+exports.baselineimage = function(image, f_nt) {
+    var bl = ee.Number(image.get('baseline'))
+    var im = ee.Image(ee.Array(bl)).clip(f_nt)
+    var im = im.select(['constant'], ['baseline'])
+    return im}
+
+

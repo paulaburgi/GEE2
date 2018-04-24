@@ -1,0 +1,59 @@
+// take mask, e.g., bare ground, and turn into polygons (features)
+// also adds area as a feature
+exports.mask2vect = function(mask) {
+  var temp = mask; // for some reason, need to have 2 bands to take mean
+  var features = mask.int().addBands(temp) 
+    .reduceToVectors({
+    scale: 10,
+    geometryType: 'polygon',
+    eightConnected: true,
+    reducer: ee.Reducer.mean(),
+    bestEffort: true
+  });
+  var gf = function(geom) {
+    var g = geom.geometry()
+    var gg = ee.Geometry(g).area(1);
+    var geom = geom.set('area', gg)
+    return geom}
+  var features_a = features.map(gf);
+  return features_a
+  }
+  
+
+
+// buffer polygons (features) of mask, get back buffered features
+exports.bufferfeatures = function(features, bufferamount) {
+  var buf = function(feature){
+      return feature.buffer(bufferamount)}
+  var featuresb = features.map(buf);
+  return featuresb}
+
+
+// calculate area of polygon regions (without buffers), puts a property
+// in each features with value of area (I think in meters squared)
+// exports.featurearea = function(features) {
+//   var gf = function(geom) {
+//     var g = geom.geometry()
+//     var gg = ee.Geometry(g).area(1);
+//     var geom = geom.set('area', gg)
+//     return geom}
+//   var h_07_v_a = features.map(gf);
+//   return h_07_v_a}
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  

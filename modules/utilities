@@ -1,0 +1,32 @@
+// interferogram color palette
+exports.intpalette      = {min: -3.14, max: 3.14, palette: ['9400D3', '4B0082', '0000FF', '00FF00', 'FFFF00', 'FF7F00', 'FF0000']}; 
+exports.intpalette_op05 = {min: -3.14, max: 3.14, palette: ['9400D3', '4B0082', '0000FF', '00FF00', 'FFFF00', 'FF7F00', 'FF0000'], opacity:0.5}; 
+
+exports.featuresubset = function(featcoll, startidx, endidx) {
+  var count = featcoll.size();
+    var temp1 = featcoll.toList(count).zip(ee.List.sequence(0, count)).map(function(list) {
+    list = ee.List(list);
+    return ee.Feature(list.get(0)).set('index', list.get(1));
+    });
+    var temp2 = ee.FeatureCollection(temp1)
+    var fidx = ee.Filter.and(ee.Filter.lessThanOrEquals('index', endidx), 
+                     ee.Filter.greaterThanOrEquals('index', startidx)); 
+    var fss  = temp2.filter(fidx)
+    return fss}
+    
+    
+exports.imcollsubset = function(imcoll, subset) {
+  var fidx      = ee.Filter.lte('idx', subset); 
+  var imcollss  = imcoll.filter(fidx)
+  return imcollss }
+    
+    
+// add system:index to feature collection
+exports.addsystemindex = function(featcoll) {
+  var count = featcoll.size();
+    var temp1 = featcoll.toList(count).zip(ee.List.sequence(0, count)).map(function(list) {
+    list = ee.List(list);
+    return ee.Feature(list.get(0)).set('system:index', ee.Number(list.get(1)).format());
+    });
+    var temp2 = ee.FeatureCollection(temp1)
+    return temp2}

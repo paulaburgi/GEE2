@@ -1,0 +1,119 @@
+// import data and regions of interest
+var int_all = ee.ImageCollection("users/pmb229/cascadia/all_good_int1"); 
+var gin  = ee.Geometry.Rectangle([-123.37522, 43.82465, -123.3696, 43.827]); 
+var gout = ee.Geometry.Rectangle([-123.36539, 43.82871, -123.35986, 43.83109]); 
+var image = ee.Image(int_all.first())
+
+// get circular mean, and circular difference
+var imf = function(image) {
+  var s = image.sin()
+  var c = image.cos()
+  var sum_cos_in = ee.Array(c.reduceRegion({
+  reducer: ee.Reducer.sum(), 
+  geometry: gin,
+  scale: 1}).get('b1'))
+  var sum_sin_in = ee.Array(s.reduceRegion({
+  reducer: ee.Reducer.sum(),
+  geometry: gin,
+  scale: 1}).get('b1'))
+  var sum_cos_out = ee.Array(c.reduceRegion({
+  reducer: ee.Reducer.sum(), 
+  geometry: gout,
+  scale: 1}).get('b1'))
+  var sum_sin_out = ee.Array(s.reduceRegion({
+  reducer: ee.Reducer.sum(),
+  geometry: gout,
+  scale: 1}).get('b1'))
+    var m_in  = sum_cos_in.atan2(sum_sin_in)
+    var m_out = sum_cos_out.atan2(sum_sin_out)
+    var phs1   = ee.Array(m_in)
+    var phs2   = ee.Array(m_out)  
+    var den   = phs2.cos().pow(2).add(phs2.sin().pow(2))
+    var rl1   = phs2.cos().multiply(phs1.cos()).add(phs1.sin().multiply(phs2.sin()))
+    var rl    = rl1.divide(den)
+    var im1   = phs1.cos().multiply(phs2.sin()).multiply(-1).add(phs1.sin().multiply(phs2.cos()))
+    var im    = im1.divide(den)
+    var pd    = rl.atan2(im)
+  var phsdif  = ee.Number(pd)
+  var image = image
+  .set('meanphs_in', m_in)
+  .set('meanphs_out', m_out)
+  .set('meanphsdiff', phsdif)
+  return image
+  }
+// Add phase difference property each interferogram
+var int_all_mean = int_all.map(imf)
+
+// take int_all_mean, and make new img collections, where
+// baselines/phsdiff are set to null if not in correct season. 
+var sumfunc = function(image) {
+  var d1s = image.get('date1')
+  var pdf = image.get('meanphsdiff')
+  var blf = image.get('baseline')
+  
+  var d1n = ee.Number.parse(ee.String(d1s).slice(3,5))
+  var pdfi = ee.Algorithms.If(d1n.gt(4).bitwiseAnd(d1n.lt(11)), pdf, 0)
+  var blfi = ee.Algorithms.If(d1n.gt(4).bitwiseAnd(d1n.lt(11)), blf, 0)
+  
+  var image = image
+  .set('meanphsdiff', pdfi)
+  .set('baseline', blfi)
+  return image
+  }
+var winfunc = function(image) {
+  var d1s = image.get('date1')
+  var pdf = image.get('meanphsdiff')
+  var blf = image.get('baseline')
+  
+  var d1n = ee.Number.parse(ee.String(d1s).slice(3,5))
+  var pdfi = ee.Algorithms.If(d1n.gt(10).bitwiseOr(d1n.lt(5)), pdf, 0)
+  var blfi = ee.Algorithms.If(d1n.gt(10).bitwiseOr(d1n.lt(5)), blf, 0)
+  
+  var image = image
+  .set('meanphsdiff', pdfi)
+  .set('baseline', blfi)
+  return image
+  }
+var int_sum_mean = int_all_mean.map(sumfunc)
+var int_win_mean = int_all_mean.map(winfunc)
+
+// combine arrays for y values  - NOT WORKING
+var idx     = int_sum_mean.aggregate_array('system:index');
+
+var x1      = int_sum_mean.aggregate_array('baseline');
+var dic_x1  = ee.Dictionary.fromLists(idx, x1) 
+var arr_x1  = dic_x1.values(idx) //List<Array>
+
+var y1      = int_sum_mean.aggregate_array('meanphsdiff'); 
+var dic_y1  = ee.Dictionary.fromLists(idx, y1) 
+var arr_y1  = dic_y1.values(idx)  //List<List<Object>>
+
+var y2      = int_win_mean.aggregate_array('meanphsdiff'); 
+var dic_y2  = ee.Dictionary.fromLists(idx, y2) 
+var arr_y2  = dic_y2.values(idx)  //List<List<Object>>
+
+// do some tests - array with 'baseline' property will concatenate,
+// however array with 'meanphsdiff' property will not concatenate
+var test1        = ee.Array.cat([arr_x1, arr_x1], 1); //working
+var test2        = ee.Array.cat([arr_y2, arr_y2], 1); //not working
+var test3        = ee.Array.cat([y2, y2], 1);         //not working
+
+print('test1', test1, 'test2', test2, 'test3', test3)
+
+var xValues = arr_x1
+var yValues = ee.Array.cat([arr_y1, arr_y2], 1); //not working
+
+print('xValues', xValues, 'yValues', yValues)
+
+var chart = ui.Chart.array.values(yValues, 0, xValues)
+ 	    .setOptions({pointSize: 4})
+
+print(chart)
+
+
+
+
+
+
+
+

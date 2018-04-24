@@ -1,0 +1,88 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var ls0 = ee.ImageCollection("LANDSAT/LE07/C01/T1_RT_TOA"),
+    ls = ee.ImageCollection("LANDSAT/LE07/C01/T1_TOA"),
+    ndvi_ls7a = ee.ImageCollection("LANDSAT/LE7_L1T_32DAY_NDVI"),
+    ndvi_ls7 = ee.ImageCollection("LANDSAT/LE7_L1T_ANNUAL_NDVI"),
+    roi = /* color: #d63000 */ee.Geometry.Point([-123.30328962432861, 43.90376719823105]),
+    roi2 = /* color: #0300d6 */ee.Geometry.Point([-123.3095552645874, 43.90809594477144]);
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+
+// For NDVI, want tier 1 data, toa 
+// vegetation: 0.3 to 0.8
+// soil: 0.1 to 0.2
+// clouds/water: negative
+
+var vizparams2    = {min: -3.14, max: 3.14, palette: ['9400D3', '4B0082', '0000FF', '00FF00', 'FFFF00', 'FF7F00', 'FF0000']}; 
+
+
+
+// load interferograms
+var int_all = ee.ImageCollection("users/pmb229/cascadia/all_good_int1"); 
+var int = ee.Image(int_all.first())
+var intbounds = int.geometry()
+
+print('intbounds', intbounds)
+
+var lsf = ls0.filterBounds(intbounds).filterDate('2007-01-01', '2011-12-31')
+
+var addNDVI = function(image) {
+  var ndvi = image.normalizedDifference(['B4', 'B5']).rename('NDVI');
+  return image.addBands(ndvi)};
+var lsf = lsf.map(addNDVI)
+
+var test = ee.Image(lsf.first())
+var ndvi = test.select('NDVI')
+
+
+
+
+
+// clip auto ndvi
+var ndvif = ee.Image(ndvi_ls7.first())
+var ndvig = ndvif.geometry()
+print('ndvi_ls7', ndvi_ls7)
+//print('ndvi_ls7', ndvi_ls7)
+print('ndvif', ndvif)
+// var clipfunc = function(image){
+//   return image.clip(intbounds)}
+// var ndvi_ls7 = ndvi_ls7.map(clipfunc)
+var chart2 = ui.Chart.image.series({
+  imageCollection: ndvi_ls7,
+  region: roi.buffer(100),
+  reducer: ee.Reducer.first(),
+  scale: 100
+  }).setOptions({title: 'NDVI: no tree loss'});
+  print(chart2); // no loss
+var chart3 = ui.Chart.image.series({
+  imageCollection: ndvi_ls7,
+  region: roi2.buffer(100),
+  reducer: ee.Reducer.first(),
+  scale: 100
+  }).setOptions({title: 'NDVI: loss year = 10'});
+  print(chart3); // loss year = 10
+
+
+// Create a chart.
+var chart = ui.Chart.image.series({
+  imageCollection: lsf.select('NDVI'),
+  region: roi,
+  reducer: ee.Reducer.first(),
+  scale: 100
+}).setOptions({title: 'NDVI over time'});
+
+// Display the chart in the console.
+//print(chart);
+
+
+
+// map
+Map.centerObject(intbounds, 10)
+Map.centerObject(roi2, 13)
+//Map.addLayer(ndvi,  {}, 'ndvi'); 
+//Map.addLayer(ndvif,  {}, 'ndvif'); 
+//Map.addLayer(int,  vizparams2, 'int'); 
+
+var display = ee.Image(0).updateMask(0).paint(intbounds, '000000', 2);
+Map.addLayer(display, {palette: 'red'}, 'intbounds');
+Map.addLayer(roi.buffer(100))
+Map.addLayer(roi2.buffer(100))

@@ -1,0 +1,80 @@
+var intreg     = require('users/pmb229/modules:intregions')
+var polybuff   = require('users/pmb229/modules:mask2regions')
+var circstats  = require('users/pmb229/modules:circstats')
+
+
+exports.circmean_nt = function(image, f_nt) {
+  var funcft1  = function(feature1) {
+      var feats1   = ee.FeatureCollection([feature1])
+      var geom     = polybuff.bufferfeatures(feats1, 500)
+      var i_nt1    = intreg.int_nt(image, feats1)
+      var mean_nt  = circstats.circmean(i_nt1, geom)
+      var featgeo  = polybuff.mask2vect(i_nt1).geometry()
+      var image1   = ee.Image(mean_nt).clip(featgeo)
+      return image1}
+      var ntmap  = f_nt.map(funcft1)
+      
+      var imcollfunc = function(im) {
+      var i = ee.Image(im)
+      return i}
+      var imcol = ee.ImageCollection(ntmap.map(imcollfunc))
+      var im = imcol.reduce({reducer: ee.Reducer.mean()})
+      return im
+    }
+  
+exports.circmean_at = function(image, f_nt_buff, m_yt, m_st) {
+var funcft2 = function(feature2) {
+      var point    = ee.Geometry.Point([-123.6539, 43.8543])
+      var feats2  = ee.FeatureCollection([feature2])  
+      var geom    = polybuff.bufferfeatures(feats2, 500)
+      var i_st1   = intreg.int_yt(image, feats2, m_yt, m_st)
+      var mean_st =  circstats.circmean(i_st1, geom)
+      var featpoly = polybuff.mask2vect(i_st1)
+      var isfeat   = featpoly.size()
+      var featgeo  = ee.Algorithms.If(isfeat.neq(0), featpoly.geometry(), point)
+      var image2  = ee.Image(mean_st).clip(featgeo)
+      return image2 }
+      var stmap  = f_nt_buff.map(funcft2)
+      
+      var imcollfunc = function(im) {
+      var i = ee.Image(im)
+      return i}
+      var imcol = ee.ImageCollection(stmap.map(imcollfunc))
+      var im = imcol.reduce({reducer: ee.Reducer.mean()})
+      return im
+    }
+
+exports.circdiff_at = function(f_nt, ntim, atim, bufferamount) {
+  var difffunc = function(bare) {
+      var buff = bare.buffer(bufferamount)
+      var ntv = ntim.reduceRegion({
+                reducer: ee.Reducer.mean(),
+                geometry: buff.geometry(), 
+                scale: 10})
+      var atv = atim.reduceRegion({
+                reducer: ee.Reducer.mean(),
+                geometry: buff.geometry(), 
+                scale: 10})
+      var ntv = ee.Number(ntv.get('constant_mean'))
+      var atv = ee.Number(atv.get('constant_mean'))
+      var at_diff  = ee.Algorithms.If(ee.Algorithms.IsEqual(atv, null), 
+                    ee.Array(-999), 
+                    circstats.circdiff(ntv, atv))
+      var at_diff = ee.Array(at_diff)
+      // var at_diff = circstats.circdiff(ntv, atv); 
+      var clipgeo = bare.geometry()
+      var image1  = ee.Image(at_diff).clip(clipgeo)
+      return image1}
+      
+       var diffim = f_nt.map(difffunc)
+       
+      
+      var imcollfunc = function(im) {
+      var i = ee.Image(im)
+      return i}
+      var imcol = ee.ImageCollection(diffim.map(imcollfunc))
+      var im2 = imcol.reduce({reducer: ee.Reducer.mean()})
+      return im2
+    }
+    
+    

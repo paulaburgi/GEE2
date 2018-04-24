@@ -1,0 +1,239 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var corpoint = /* color: #d63000 */ee.Geometry.Point([-123.36405775177002, 43.84164597031404]),
+    corpoints = /* color: #d63000 */ee.Geometry.MultiPoint(
+        [[-123.30328, 43.90376],
+         [-123.40067, 43.82202]]);
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+var h_all   = ee.Image("UMD/hansen/global_forest_change_2016_v1_4");
+var int     = ee.ImageCollection("users/pmb229/test/image9_nodata_metadata_test"); 
+var roi     = /* color: #d63000 */ee.Geometry.Point([-123.30328962432861, 43.90376719823105]);
+
+print('h_all', h_all)
+
+//  sumatra 
+// var int_all = ee.ImageCollection("users/pmb229/sumatra/all_good_int2"); 
+// var cor_all = ee.ImageCollection("users/pmb229/sumatra/all_good_cor2"); 
+//  cascadia
+var int_all = ee.ImageCollection("users/pmb229/cascadia/all_good_int1"); 
+var cor_all = ee.ImageCollection("users/pmb229/cascadia/all_cor_int1"); 
+
+
+//vis params
+var vizparams2    = {min: -3.14, max: 3.14, palette: ['9400D3', '4B0082', '0000FF', '00FF00', 'FFFF00', 'FF7F00', 'FF0000']}; 
+var vizparams_cor = {min: 0.1, max: 0.7, opacity: 0.5, palette: ['0000FF', '00FF00', 'FFFF00', 'FF7F00', 'FF0000']}; 
+
+// get bounds on interferograms
+var intbounds = int_all.geometry()
+
+//find areas with mean high correlation 
+var mcor = cor_all.mean()
+var gcor = ee.Image(0)
+    .where(mcor.gt(0.20), 1)
+    .clip(intbounds)
+  // update mask so that all values = 0 are masked
+  var gcor = gcor.updateMask(gcor)
+
+
+
+// isolate loss year band
+var h_ly = h_all.select('lossyear'); 
+
+// Mask that only includes areas of good correlation
+  var h_gc = ee.Image(0)
+    .where(gcor.eq(1), 1)
+    .clip(intbounds)
+
+// create new image with only 2008 tree loss
+var h_08 = ee.Image(0)
+    .where(h_ly.eq(8), 1)
+    .clip(intbounds)
+  // update mask so that all values = 0 are masked
+  var h_08 = h_08.updateMask(h_08)
+  var h_08 = h_08.updateMask(h_gc)
+
+
+// create new image with only 2007 tree loss
+var h_07 = ee.Image(0)
+    .where(h_ly.eq(7), 1)
+    .clip(intbounds)
+  // update mask so that all values = 0 are masked
+  var h_07 = h_07.updateMask(h_07)
+  //var h_07 = h_07.updateMask(h_gc) // also masks areas with mean poor correlation
+  
+// create new image NO tree loss
+var h_0 = ee.Image(0)
+    .where(h_ly.eq(0), 1)
+    .clip(intbounds)
+  // update mask so that all values = 0 are masked
+  var h_0 = h_0.updateMask(h_0)
+  //var h_0 = h_0.updateMask(h_gc)
+
+// image that is reverse of tree loss in 2007
+var h_n07 = ee.Image(1)
+    .where(h_ly.eq(7), 0)
+    .clip(intbounds)
+var h_n07 = h_n07.updateMask(h_n07)
+
+
+// test: filter 1 int 
+var fidx = ee.Filter.eq('idx', 0); 
+var ici  = int_all.filter(fidx); 
+var int = ee.Image(ici.first());
+var intmask07 = int.updateMask(h_07)
+var intmask0  = int.updateMask(h_0)
+
+// filter all ints s.t. only show int where clearcut happened in 2007
+var hmask = function(image) {
+  return image.updateMask(h_07)}; 
+var intsmask07 = int_all.map(hmask); 
+
+
+// Take the a mask (e.g. 2007 tree loss) Then, use 
+// reduceToVector, which takes the mask (image) and makes 
+// polygons for each distinct area that isn't masked
+var temp1 = h_07; // for some reason, need to have 2 bands to take mean
+var h_07_v = h_07.int().addBands(temp1) 
+  .reduceToVectors({
+    crs: intmask07.projection(),
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: true,
+  reducer: ee.Reducer.mean(),
+  bestEffort: true
+});
+
+
+// buffer of 2007 loss
+var buf = function(feature){
+    return feature.buffer(300);
+};
+var h_07_vb = h_07_v.map(buf);
+print('h_07_vb', h_07_vb)
+print('buffer', buf)
+
+// calculate area 
+var gf = function(geom) {
+  var g = geom.geometry()
+  var gg = ee.Geometry(g).area(1);
+  var geom = geom.set('area', gg)
+  return geom}
+var h_07_v_a = h_07_v.map(gf);
+
+// mask filtered by area
+var h_07_v_af = h_07_v_a.filter(ee.Filter.gt('area', 30000))
+
+// Mask no tree loss area
+// make mask from feature collection of buffered polygons
+var test1 = h_07_vb.first()
+var test2 = ee.FeatureCollection([test1])
+var h_07_vb = test2
+
+var addField = function(feature){
+  return feature.set("Value", 1)};
+var inbuff = h_07_vb.map(addField).reduceToImage(["Value"], ee.Reducer.mean());
+var inbuff_n07 = inbuff.updateMask(h_n07)
+var inbuff_n07_0 = inbuff.updateMask(h_0)
+var newint0 = int.updateMask(inbuff_n07_0);
+// Mask all interferograms in collection
+var h0mask = function(image) {
+  return image.updateMask(inbuff_n07_0)}; 
+var intsmask0 = int_all.map(h0mask); 
+var int0 = ee.Image(intsmask0.first())
+
+// do same as above except for each feature on 1 image
+var count = h_07_vb.size();
+var h_07_vbl = h_07_vb.toList(count).zip(ee.List.sequence(0, count)).map(function(list) {
+list = ee.List(list);
+  return ee.Feature(list.get(0)).set('index', list.get(1));
+});
+var h_07_vbi = ee.FeatureCollection(h_07_vbl)
+
+var polybuff   = require('users/pmb229/modules:mask2regions')
+var h_n07_v    = polybuff.mask2vect(h_n07)
+var h_0_v      = polybuff.mask2vect(h_0)
+var buffvec = h_07_vb.map(addField);
+var barevec = h_07_v.map(addField); 
+var nobfvec = h_n07_v.map(addField); 
+var treevec = h_0_v.map(addField); 
+
+var test1 = ee.FeatureCollection(buffvec.first())
+//var test2 = test1.reduceToImage(["Value"], ee.Reducer.mean())
+
+//print('test2', test2)
+
+
+print('buffvec', buffvec, 'barevec', barevec, 'nobfvec', nobfvec, 'treevec', treevec)
+
+
+ Map.centerObject(intbounds, 11)
+ //Map.centerObject(ee.Geometry.Point([-123.3892, 43.8333]), 13)
+ //Map.centerObject(ee.Geometry.Point([-123.36428, 43.84121]), 15)
+//.addLayer(intmask07, {palette: ['red'], opacity: 0.4}, 'tree loss 2007'); 
+Map.addLayer(intmask07, vizparams2, 'tree loss 2007'); 
+//Map.addLayer(h_all.select('lossyear'), {min:0, max:16}, 'h_all'); 
+//Map.addLayer(intmask0,  {palette: ['white'], opacity: 0.7}, 'no tree loss'); 
+Map.addLayer(newint0, vizparams2, 'trees around loss sites'); 
+Map.addLayer(int0, vizparams2, 'trees around loss sites 2'); 
+//Map.addLayer(h_07_v,  {palette: ['blue'], opacity: 0.4}, '2007 loss'); //
+Map.addLayer(h_0,  {palette: ['white'], opacity: 0.4}, 'no tree loss'); 
+//Map.addLayer(gcor, {palette: ['red'], opacity: 0.2}, 'mean cor > 0.2'); 
+//Map.addLayer(int, vizparams2, 'int'); 
+
+//Map.addLayer(test2,  {palette: ['red'], opacity: 0.7}, 'edge detection'); 
+// var display = ee.Image(0).updateMask(0).paint(test, '000000', 1);
+// Map.addLayer(display, {palette: '000000'}, 'test');
+
+var display = ee.Image(0).updateMask(0).paint(h_07_v, '000000', 2);
+//Map.addLayer(display, {palette: 'red'}, 'h_07_v_af');
+
+var display = ee.Image(0).updateMask(0).paint(h_07_v_af, '000000', 1);
+Map.addLayer(display, {palette: 'red'}, 'h_07_v_af');
+
+
+var display = ee.Image(0).updateMask(0).paint(h_07_vb, '000000', 3);
+Map.addLayer(display, {palette: 'black'}, 'h_07_vb');
+
+Map.addLayer(roi, {}, 'roi');
+
+
+ print('cor_all', cor_all)
+ 
+ 
+ var corpoint_buff = corpoints.buffer(100)
+ Map.addLayer(corpoint_buff, {}, 'corpoint_buff');
+ var chart = ui.Chart.image.series({
+  imageCollection: cor_all,
+  region: corpoint,
+  reducer: ee.Reducer.first(),
+  scale: 100, 
+  xProperty: 'datenum2'
+  }).setOptions({title: 'correlation time series'});
+  //print(chart); // no loss
+ 
+ 
+var corpoint_geos = corpoints.coordinates() 
+var corpoints0    = ee.Geometry.Point(corpoint_geos.get(0))
+var corpoints1    = ee.Geometry.Point(corpoint_geos.get(1))
+var regions = new ee.FeatureCollection(ee.Feature(corpoints0), ee.Feature(corpoints1))
+var chart2 = ui.Chart.image.doySeriesByRegion({
+  imageCollection: cor_all,
+  bandName: 'b1',
+  regions: regions,
+  regionReducer: ee.Reducer.mean(),
+  scale: 100, 
+  yearReducer: null,
+  seriesProperty: 'datenum2'
+  }).setOptions({title: 'correlation time series'});
+  //print(chart2); 
+ 
+ print('int', int)
+ var date1 = ee.String(int.get('date1'))
+  print('date1', date1)
+ var d = date1.split('\d')
+ print('d', d.get(1))
+ print(d.slice(1,2))
+ 
+ 
+ 
+ 
+ 

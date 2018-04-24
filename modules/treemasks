@@ -1,0 +1,60 @@
+// define years that are considered bare. 4=2004, 6=2006. 
+var bare_range1 = 4; 
+var bare_range2 = 6; 
+
+// make a mask with only trees that have never been cut down
+exports.talltreemask = function(goward_data_first, hansen_data, bounds) {
+  var m_tt  = ee.Image(1).clip(bounds)
+  var g_tt  = ee.Image(0)
+      .where(goward_data_first.eq(2), 1)
+      .clip(bounds)
+  var h_tt  = ee.Image(0)
+      .where(hansen_data.eq(0).bitwiseOr(hansen_data.gt(11)), 1)
+      .clip(bounds)
+  var m_tt1 = m_tt.updateMask(g_tt)
+  var m_tt2 = m_tt.updateMask(h_tt)
+  var m_tt  = m_tt2.updateMask(m_tt1) 
+  return m_tt}
+
+// make a mask with only trees that were cut down between 1980-1995
+exports.shorttreemask = function(goward_data_last, hansen_data, bounds) {
+  var m_st   = ee.Image(1).clip(bounds)
+    var g_st = ee.Image(0)
+        .where(goward_data_last.gte(10).bitwiseAnd(goward_data_last.lte(25)), 1)
+        .clip(bounds)
+    var h_st = ee.Image(0)
+        .where(hansen_data.eq(0).bitwiseOr(hansen_data.gt(11)), 1)
+        .clip(bounds)
+  var m_st1  = m_st.updateMask(g_st)
+  var m_st2  = m_st.updateMask(h_st)
+  var m_st   = m_st1.updateMask(m_st2)
+  return m_st}
+
+// make a mask with only trees that where cut down between 2004-2006
+exports.notreemask = function(hansen_data, bounds) {
+  var m_nt   = ee.Image(1).clip(bounds)
+    var h_nt = ee.Image(0)
+        .where(hansen_data.gte(bare_range1).bitwiseAnd(hansen_data.lte(bare_range2)), 1)
+        .clip(bounds)
+  var m_nt   = m_nt.updateMask(h_nt)
+  return m_nt}
+
+// make a mask with everything BUT trees that where cut down between 2004-2006
+exports.notbaremask = function(hansen_data, bounds) {
+  var h_n07 = ee.Image(1)
+      .where(hansen_data.gte(bare_range1).bitwiseAnd(hansen_data.lte(bare_range2)), 0)
+      .clip(bounds)
+  var m_yt = h_n07.updateMask(h_n07)
+  return m_yt}
+  
+// phase difference no data (-999) mask
+exports.nodatamask = function(phsdiffim, bounds) {
+  var i_nd         = ee.Image(0)
+      .where(phsdiffim.gte(-4).bitwiseAnd(phsdiffim.lte(4)), 1)
+      .clip(bounds)
+  var m_nt           = i_nd.updateMask(i_nd)
+  var phsdiffim_data = phsdiffim.updateMask(m_nt)
+  return phsdiffim_data}
+
+
+

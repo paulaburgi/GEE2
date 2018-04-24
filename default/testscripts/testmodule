@@ -1,0 +1,9 @@
+exports.testmodule1 = function(ic1) {
+  var fdf     = ee.Image(ic1.first())
+  return fdf
+}
+
+exports.testmodule2 = function(ic1) {
+  var fdf     = ee.Image(ic1.geometry())
+  return fdf
+}
